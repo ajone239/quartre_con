@@ -130,15 +130,16 @@ impl Board {
             }
         }
 
-        println!("{}:{}", i, j);
+        println!("{}:{}:", i, j);
         for e in evals {
-            println!("{}", e);
+            print!(" {}", e);
             match e {
                 4 => return SquareResult::Connect(Piece::Yellow),
                 -4 => return SquareResult::Connect(Piece::Red),
                 _ => continue,
             }
         }
+        println!();
 
         SquareResult::Disparate(evals.into_iter().sum())
     }

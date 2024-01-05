@@ -7,7 +7,7 @@ use quatre_con::{
 fn main() {
     let mut g = Game {
         board: Box::new(Board::default()),
-        player1: Box::new(Random { color: Piece::Red }),
+        player1: Box::new(Human { color: Piece::Red }),
         player2: Box::new(Random {
             color: Piece::Yellow,
         }),
