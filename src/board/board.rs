@@ -18,13 +18,14 @@ pub enum BoardError {
     NoColor,
 }
 
+#[derive(Debug)]
 pub struct BoardMove {
     column: usize,
     color: Option<Piece>,
 }
 
 impl BoardMove {
-    fn add_color(&mut self, color: Piece) {
+    pub fn add_color(&mut self, color: Piece) {
         self.color = Some(color);
     }
 }
@@ -56,7 +57,7 @@ impl MovePiece for Board {
     type MoveData = BoardMove;
     type MoveError = BoardError;
 
-    fn apply_move(&mut self, move_data: Self::MoveData) -> Result<(), Self::MoveError> {
+    fn apply_move(&mut self, move_data: &Self::MoveData) -> Result<(), Self::MoveError> {
         let column = move_data.column;
 
         let Some(color) = move_data.color else {
@@ -70,7 +71,6 @@ impl MovePiece for Board {
         let square: Option<&mut Square> = self
             .board
             .iter_mut()
-            .rev()
             .map(|r| &mut r[column])
             .find(|c| c.is_empty());
 
@@ -83,7 +83,7 @@ impl MovePiece for Board {
         }
     }
 
-    fn remove_move(&mut self, move_data: Self::MoveData) -> Result<(), Self::MoveError> {
+    fn remove_move(&mut self, move_data: &Self::MoveData) -> Result<(), Self::MoveError> {
         let column = move_data.column;
 
         if column >= WIDTH {
@@ -105,6 +105,14 @@ impl MovePiece for Board {
         }
     }
 
+    fn is_move_valid(&self, move_data: &Self::MoveData) -> bool {
+        self.list_moves()
+            .iter()
+            .map(|m| m.column)
+            .find(|i| move_data.column == *i)
+            .is_some()
+    }
+
     fn list_moves(&self) -> Vec<Self::MoveData> {
         self.board[HEIGHT - 1]
             .iter()
@@ -117,7 +125,7 @@ impl MovePiece for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for row in self.board.iter() {
+        for row in self.board.iter().rev() {
             write!(f, "|")?;
             for cell in row {
                 write!(f, " {}", cell)?;
