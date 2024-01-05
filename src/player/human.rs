@@ -1,12 +1,22 @@
-use std::{fmt::Debug, io, usize};
+use std::{
+    fmt::{Debug, Display},
+    io, usize,
+};
 
 use crate::{
     board::{board::BoardMove, piece::Piece},
     game::Play,
 };
 
+#[derive(Debug)]
 pub struct Human {
     pub color: Piece,
+}
+
+impl Display for Human {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.color)
+    }
 }
 
 impl<E: Debug> Play<E> for Human {

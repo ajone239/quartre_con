@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display};
 use thiserror::Error;
 
 use super::{piece::Piece, square::Square};
-use crate::game::MovePiece;
+use crate::game::{Evaluate, GameEvaluation, MovePiece};
 
 const WIDTH: usize = 7;
 const HEIGHT: usize = 6;
@@ -16,6 +16,12 @@ pub enum BoardError {
     OutOfRange(usize),
     #[error("Move failed to provide a color when it was needed.")]
     NoColor,
+}
+
+enum SquareResult {
+    Connect(Piece),
+    Disparate(i64),
+    Empty,
 }
 
 #[derive(Debug)]
@@ -51,6 +57,125 @@ impl From<usize> for BoardMove {
 #[derive(Default, Debug)]
 pub struct Board {
     board: [[Square; WIDTH]; HEIGHT],
+}
+
+impl Board {
+    #[cfg(test)]
+    fn new(board_str: &str) -> Self {
+        let rows: Vec<&str> = board_str.split('\n').collect();
+
+        let mut board = [[Square::Empty; WIDTH]; HEIGHT];
+
+        for (i, row) in rows.iter().enumerate() {
+            let row: Vec<Square> = row
+                .chars()
+                .map(|c| match c {
+                    'R' => Square::NonEmpty(Piece::Red),
+                    'Y' => Square::NonEmpty(Piece::Yellow),
+                    '_' => Square::Empty,
+                    _ => unreachable!(),
+                })
+                .collect();
+
+            board[i] = row.try_into().unwrap();
+        }
+
+        Self { board }
+    }
+
+    fn is_empty(&self) -> bool {
+        !self.board.iter().any(|r| r.iter().any(|c| !c.is_empty()))
+    }
+
+    fn is_full(&self) -> bool {
+        !self.board.iter().any(|r| r.iter().any(|c| c.is_empty()))
+    }
+
+    fn eval_square(&self, i: usize, j: usize) -> SquareResult {
+        let Square::NonEmpty(color) = self.board[i][j] else {
+            return SquareResult::Empty;
+        };
+
+        let mut evals = match color {
+            Piece::Yellow => [1; 4],
+            Piece::Red => [-1; 4],
+        };
+
+        for k in 1..=3 {
+            /*
+             * *  *  *
+             *  * * *
+             *   ***
+             *    ****
+             */
+
+            let directions = [
+                // North West
+                (i + k, j.overflowing_sub(k).0),
+                // North
+                (i + k, j),
+                // North East
+                (i + k, j + k),
+                // East
+                (i, j + k),
+            ];
+
+            for (d, (i, j)) in directions.iter().enumerate() {
+                let square = match self.read_bounded(*i, *j) {
+                    Some(Piece::Yellow) => 1,
+                    Some(Piece::Red) => -1,
+                    None => 0,
+                };
+                evals[d] += square;
+            }
+        }
+
+        println!("{}:{}", i, j);
+        for e in evals {
+            println!("{}", e);
+            match e {
+                4 => return SquareResult::Connect(Piece::Yellow),
+                -4 => return SquareResult::Connect(Piece::Red),
+                _ => continue,
+            }
+        }
+
+        SquareResult::Disparate(evals.into_iter().sum())
+    }
+    fn read_bounded(&self, i: usize, j: usize) -> Option<Piece> {
+        if i >= HEIGHT || j >= WIDTH {
+            return None;
+        }
+
+        match self.board[i][j] {
+            Square::Empty => None,
+            Square::NonEmpty(color) => Some(color),
+        }
+    }
+}
+
+impl Evaluate for Board {
+    fn evaluate(&self) -> crate::game::GameEvaluation {
+        let mut eval = 0.0;
+        for (i, row) in self.board.iter().enumerate() {
+            for (j, _) in row.iter().enumerate() {
+                let sqres = self.eval_square(i, j);
+
+                match sqres {
+                    SquareResult::Connect(Piece::Yellow) => return GameEvaluation::Win,
+                    SquareResult::Connect(Piece::Red) => return GameEvaluation::Lose,
+                    SquareResult::Disparate(val) => eval += val as f64,
+                    SquareResult::Empty => (),
+                }
+            }
+        }
+
+        if self.is_full() {
+            return GameEvaluation::Draw;
+        }
+
+        GameEvaluation::OnGoing(eval)
+    }
 }
 
 impl MovePiece for Board {

@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 
 use super::piece::Piece;
 
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Square {
     #[default]
     Empty,

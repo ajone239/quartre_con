@@ -7,12 +7,10 @@ use quatre_con::{
 fn main() {
     let mut g = Game {
         board: Box::new(Board::default()),
-        players: vec![
-            Box::new(Human { color: Piece::Red }),
-            Box::new(Random {
-                color: Piece::Yellow,
-            }),
-        ],
+        player1: Box::new(Random { color: Piece::Red }),
+        player2: Box::new(Random {
+            color: Piece::Yellow,
+        }),
     };
 
     g.game_loop();
