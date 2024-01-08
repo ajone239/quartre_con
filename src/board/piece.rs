@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Piece {
     Yellow,
     Red,

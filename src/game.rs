@@ -10,6 +10,7 @@ pub trait MovePiece {
     fn list_moves(&self) -> Vec<Self::MoveData>;
 }
 
+#[derive(Debug)]
 pub enum GameEvaluation {
     Win,
     Lose,

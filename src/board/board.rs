@@ -24,7 +24,7 @@ enum SquareResult {
     Empty,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct BoardMove {
     column: usize,
     color: Option<Piece>,
@@ -54,9 +54,10 @@ impl From<usize> for BoardMove {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Board {
     board: [[Square; WIDTH]; HEIGHT],
+    turn_count: usize,
 }
 
 impl Board {
@@ -80,9 +81,13 @@ impl Board {
             board[i] = row.try_into().unwrap();
         }
 
-        Self { board }
+        Self {
+            board,
+            turn_count: 0,
+        }
     }
 
+    #[allow(dead_code)]
     fn is_empty(&self) -> bool {
         !self.board.iter().any(|r| r.iter().any(|c| !c.is_empty()))
     }
@@ -203,6 +208,7 @@ impl MovePiece for Board {
         match square {
             None => Err(BoardError::InvalidMove(column)),
             Some(s) => {
+                self.turn_count += 1;
                 *s = Square::NonEmpty(color);
                 Ok(())
             }
@@ -219,12 +225,14 @@ impl MovePiece for Board {
         let square: Option<&mut Square> = self
             .board
             .iter_mut()
+            .rev()
             .map(|r| &mut r[column])
             .find(|c| !c.is_empty());
 
         match square {
             None => Err(BoardError::InvalidMove(column)),
             Some(s) => {
+                self.turn_count -= 1;
                 *s = Square::Empty;
                 Ok(())
             }
@@ -240,11 +248,17 @@ impl MovePiece for Board {
     }
 
     fn list_moves(&self) -> Vec<Self::MoveData> {
+        let color = if self.turn_count & 1 == 0 {
+            Piece::Yellow
+        } else {
+            Piece::Red
+        };
+
         self.board[HEIGHT - 1]
             .iter()
             .enumerate()
             .filter(|(_, s)| s.is_empty())
-            .map(|(i, _)| i.into())
+            .map(|(i, _)| (i, color).into())
             .collect()
     }
 }
@@ -263,7 +277,7 @@ impl Display for Board {
         for i in 0..WIDTH {
             write!(f, " {}", i)?;
         }
-        writeln!(f, " =")?;
+        writeln!(f, " = {}", self.turn_count)?;
 
         Ok(())
     }
