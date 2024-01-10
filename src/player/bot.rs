@@ -1,18 +1,21 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use crate::{
     board::{
-        board::{Board, BoardMove},
+        board::{Board, BoardError, BoardMove},
         piece::Piece,
     },
-    game::Play,
+    game::{GameBoard, Play},
     tree::Tree,
 };
 
 #[derive(Debug)]
 pub struct Bot {
     pub color: Piece,
-    game_tree: Tree<Board, BoardMove>,
+    game_tree: Tree<Board, BoardMove, BoardError>,
 }
 
 impl Display for Bot {
@@ -25,7 +28,7 @@ impl Bot {
     pub fn new(color: Piece, board: Board) -> Self {
         let mut board = board.clone();
         let mut game_tree = Tree::new(board.clone(), 3);
-        game_tree.walk_start(&mut board, 0);
+        game_tree.walk_start(&mut board);
 
         println!("{}", game_tree);
 
@@ -33,19 +36,13 @@ impl Bot {
     }
 }
 
-impl<E: Debug> Play<E> for Bot {
-    type MoveData = BoardMove;
-
-    fn get_move(&self, board: &dyn crate::game::GameBoard<Self::MoveData, E>) -> Self::MoveData {
-        board
-            .list_moves()
-            .into_iter()
-            .map(|mut m| {
-                m.add_color(self.color);
-                m
-            })
-            .next()
-            .unwrap()
+impl<B, D, E: Debug> Play<B, D, E> for Bot
+where
+    B: GameBoard<D, E>,
+    D: FromStr,
+{
+    fn get_move(&self, board: &B) -> D {
+        board.list_moves().into_iter().next().unwrap()
     }
 
     fn needs_to_see_board(&self) -> bool {

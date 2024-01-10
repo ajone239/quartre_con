@@ -7,12 +7,12 @@ use quatre_con::{
 fn main() {
     let board = Board::default();
     let player1 = Human {
-        color: Piece::Yellow,
+        name: "player1".to_string(),
     };
     let player2 = Bot::new(Piece::Red, board.clone());
 
     let mut g = Game {
-        board: Box::new(board),
+        board,
         player1: Box::new(player1),
         player2: Box::new(player2),
     };

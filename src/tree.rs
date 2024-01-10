@@ -2,9 +2,10 @@ use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
+    marker::PhantomData,
 };
 
-use crate::game::{Evaluate, GameEvaluation, MovePiece};
+use crate::game::{GameBoard, GameEvaluation};
 
 #[derive(Debug)]
 struct TreeNode<D: Debug + Clone> {
@@ -23,20 +24,23 @@ impl<D: Clone + Debug> Display for TreeNode<D> {
 }
 
 #[derive(Debug)]
-pub struct Tree<B, D>
+pub struct Tree<B, D, E>
 where
     D: Clone + Debug,
-    B: Hash + Eq + MovePiece<MoveData = D> + Evaluate + Clone + Display,
+    E: Debug,
+    B: Hash + Eq + Clone + GameBoard<D, E>,
 {
     init_position: B,
     tree_node_map: HashMap<B, TreeNode<D>>,
     walk_depth: usize,
+    ghost: PhantomData<E>,
 }
 
-impl<B, D> Tree<B, D>
+impl<B, D, E> Tree<B, D, E>
 where
     D: Clone + Debug,
-    B: Hash + Eq + MovePiece<MoveData = D> + Evaluate + Clone + Display,
+    E: Debug,
+    B: Hash + Eq + Clone + GameBoard<D, E>,
 {
     pub fn new(board: B, walk_depth: usize) -> Self {
         let depth = 0;
@@ -60,10 +64,13 @@ where
             init_position,
             tree_node_map,
             walk_depth,
+            ghost: PhantomData::default(),
         }
     }
 
-    pub fn walk_start(&mut self, board: &mut B, start_depth: usize) {
+    pub fn walk_start(&mut self, board: &mut B) {
+        let start_depth = self.tree_node_map.get(&board).unwrap().depth;
+
         self.walk_rec(board, start_depth, 1);
     }
 
@@ -131,10 +138,11 @@ where
     }
 }
 
-impl<B, D> Display for Tree<B, D>
+impl<B, D, E> Display for Tree<B, D, E>
 where
     D: Clone + Debug,
-    B: Hash + Eq + MovePiece<MoveData = D> + Evaluate + Clone + Display,
+    E: Debug,
+    B: Hash + Eq + Clone + GameBoard<D, E>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut board = self.init_position.clone();

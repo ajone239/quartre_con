@@ -23,3 +23,15 @@ impl Display for Square {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::board::square::Piece;
+
+    #[test]
+    fn test_is_empty() {
+        assert!(Square::Empty.is_empty());
+        assert!(!Square::NonEmpty(Piece::Red).is_empty());
+    }
+}

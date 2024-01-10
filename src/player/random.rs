@@ -1,9 +1,12 @@
 use rand::seq::IteratorRandom;
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use crate::{
-    board::{board::BoardMove, piece::Piece},
-    game::Play,
+    board::piece::Piece,
+    game::{GameBoard, Play},
 };
 
 #[derive(Debug)]
@@ -17,18 +20,16 @@ impl Display for Random {
     }
 }
 
-impl<E: Debug> Play<E> for Random {
-    type MoveData = BoardMove;
-
-    fn get_move(&self, board: &dyn crate::game::GameBoard<Self::MoveData, E>) -> Self::MoveData {
+impl<B, D, E: Debug> Play<B, D, E> for Random
+where
+    B: GameBoard<D, E>,
+    D: FromStr,
+{
+    fn get_move(&self, board: &B) -> D {
         board
             .list_moves()
             .into_iter()
             .choose(&mut rand::thread_rng())
-            .map(|mut m| {
-                m.add_color(self.color);
-                m
-            })
             .unwrap()
     }
 

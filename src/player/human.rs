@@ -1,44 +1,42 @@
 use std::{
     fmt::{Debug, Display},
-    io, usize,
+    io,
+    str::FromStr,
 };
 
-use crate::{
-    board::{board::BoardMove, piece::Piece},
-    game::Play,
-};
+use crate::game::{GameBoard, Play};
 
 #[derive(Debug)]
 pub struct Human {
-    pub color: Piece,
+    pub name: String,
 }
 
 impl Display for Human {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.color)
+        write!(f, "{}", self.name)
     }
 }
 
-impl<E: Debug> Play<E> for Human {
-    type MoveData = BoardMove;
-
-    fn get_move(&self, board: &dyn crate::game::GameBoard<Self::MoveData, E>) -> Self::MoveData {
+impl<B, D, E: Debug> Play<B, D, E> for Human
+where
+    B: GameBoard<D, E>,
+    D: FromStr,
+{
+    fn get_move(&self, board: &B) -> D {
         let stdin = io::stdin();
         let mut lines = stdin.lines();
 
         while let Some(Ok(line)) = lines.next() {
-            match line.parse::<usize>() {
+            match D::from_str(&line) {
                 Ok(val) => {
-                    let mut move_data: BoardMove = val.into();
-                    move_data.add_color(self.color);
-                    if !board.is_move_valid(&move_data) {
+                    if !board.is_move_valid(&val) {
                         println!("Invalid Move for current game state.");
                         continue;
                     }
-                    return move_data;
+                    return val;
                 }
-                Err(err) => {
-                    println!("Invalid text entry: {:?}", err);
+                Err(_) => {
+                    println!("Invalid text entry");
                     continue;
                 }
             }

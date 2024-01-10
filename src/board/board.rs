@@ -1,14 +1,17 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use thiserror::Error;
 
 use super::{piece::Piece, square::Square};
 use crate::game::{Evaluate, GameEvaluation, MovePiece};
 
-const WIDTH: usize = 7;
 const HEIGHT: usize = 6;
+const WIDTH: usize = 7;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BoardError {
     #[error("Move {0} can't be played on this board.")]
     InvalidMove(usize),
@@ -24,7 +27,7 @@ enum SquareResult {
     Empty,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct BoardMove {
     column: usize,
     color: Option<Piece>,
@@ -54,10 +57,24 @@ impl From<usize> for BoardMove {
     }
 }
 
+impl FromStr for BoardMove {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let column = s.parse::<usize>()?;
+        Ok(column.into())
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Board {
     board: [[Square; WIDTH]; HEIGHT],
     turn_count: usize,
+}
+
+impl AsRef<Board> for Board {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }
 
 impl Board {
@@ -65,26 +82,29 @@ impl Board {
     fn new(board_str: &str) -> Self {
         let rows: Vec<&str> = board_str.split('\n').collect();
 
+        let mut turn_count = 0;
         let mut board = [[Square::Empty; WIDTH]; HEIGHT];
 
-        for (i, row) in rows.iter().enumerate() {
-            let row: Vec<Square> = row
-                .chars()
-                .map(|c| match c {
-                    'R' => Square::NonEmpty(Piece::Red),
-                    'Y' => Square::NonEmpty(Piece::Yellow),
-                    '_' => Square::Empty,
-                    _ => unreachable!(),
-                })
-                .collect();
+        for (i, row) in rows.iter().rev().map(|l| l.trim()).enumerate() {
+            let row_iter = row.chars().map(|c| match c {
+                'R' => {
+                    turn_count += 1;
+                    Square::NonEmpty(Piece::Red)
+                }
+                'Y' => {
+                    turn_count += 1;
+                    Square::NonEmpty(Piece::Yellow)
+                }
+                '_' => Square::Empty,
+                _ => unreachable!(),
+            });
 
-            board[i] = row.try_into().unwrap();
+            for (j, c) in row_iter.enumerate() {
+                board[i - 1][j] = c;
+            }
         }
 
-        Self {
-            board,
-            turn_count: 0,
-        }
+        Self { board, turn_count }
     }
 
     #[allow(dead_code)]
@@ -94,6 +114,14 @@ impl Board {
 
     fn is_full(&self) -> bool {
         !self.board.iter().any(|r| r.iter().any(|c| c.is_empty()))
+    }
+
+    fn whos_to_play(&self) -> Piece {
+        if self.turn_count & 1 == 0 {
+            Piece::Yellow
+        } else {
+            Piece::Red
+        }
     }
 
     fn eval_square(&self, i: usize, j: usize) -> SquareResult {
@@ -135,9 +163,7 @@ impl Board {
             }
         }
 
-        println!("{}:{}:", i, j);
         for e in evals {
-            print!(" {}", e);
             match e {
                 4 => return SquareResult::Connect(Piece::Yellow),
                 -4 => return SquareResult::Connect(Piece::Red),
@@ -191,9 +217,7 @@ impl MovePiece for Board {
     fn apply_move(&mut self, move_data: &Self::MoveData) -> Result<(), Self::MoveError> {
         let column = move_data.column;
 
-        let Some(color) = move_data.color else {
-            return Err(BoardError::NoColor);
-        };
+        let color = self.whos_to_play();
 
         if column >= WIDTH {
             return Err(BoardError::OutOfRange(column));
@@ -240,6 +264,12 @@ impl MovePiece for Board {
     }
 
     fn is_move_valid(&self, move_data: &Self::MoveData) -> bool {
+        if let Some(color) = move_data.color {
+            if self.whos_to_play() != color {
+                return false;
+            }
+        }
+
         self.list_moves()
             .iter()
             .map(|m| m.column)
@@ -248,11 +278,7 @@ impl MovePiece for Board {
     }
 
     fn list_moves(&self) -> Vec<Self::MoveData> {
-        let color = if self.turn_count & 1 == 0 {
-            Piece::Yellow
-        } else {
-            Piece::Red
-        };
+        let color = self.whos_to_play();
 
         self.board[HEIGHT - 1]
             .iter()
@@ -280,5 +306,287 @@ impl Display for Board {
         writeln!(f, " = {}", self.turn_count)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use rstest::rstest;
+
+    #[test]
+    fn test_new() {
+        let default_board = r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        _______
+        ";
+
+        let test_board = Board::new(default_board);
+
+        let expected_board = Board::default();
+
+        assert_eq!(test_board, expected_board);
+    }
+
+    #[rstest]
+    #[case(
+        r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        _______
+        ",
+        true
+    )]
+    #[case(
+        r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        Y______
+        ",
+        false
+    )]
+    fn test_is_empty(#[case] board_str: &str, #[case] expected: bool) {
+        let test_board = Board::new(board_str);
+
+        assert_eq!(expected, test_board.is_empty());
+    }
+
+    #[test]
+    fn test_apply_move() {
+        let mut board = Board::default();
+
+        let expected_board = Board::new(
+            r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        Y______
+        ",
+        );
+
+        assert!(board.is_empty());
+
+        let move_data = BoardMove {
+            column: 0,
+            color: Some(Piece::Yellow),
+        };
+
+        board.apply_move(&move_data).unwrap();
+
+        assert_eq!(board, expected_board);
+    }
+
+    #[rstest]
+    #[case(
+        r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        Y______
+        ",
+        0,
+        r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        _______
+        "
+    )]
+    #[case(
+        r"
+        _______
+        _______
+        _______
+        _______
+        R______
+        Y______
+        ",
+        0,
+        r"
+        _______
+        _______
+        _______
+        _______
+        _______
+        Y______
+        "
+    )]
+    #[case(
+        r"
+        _______
+        _______
+        _______
+        _______
+        R______
+        YY__R__
+        ",
+        4,
+        r"
+        _______
+        _______
+        _______
+        _______
+        R______
+        YY_____
+        "
+    )]
+    fn test_remove_move(#[case] init: &str, #[case] column: usize, #[case] expected: &str) {
+        let mut init = Board::new(init);
+
+        let expected = Board::new(expected);
+
+        init.remove_move(&column.into()).unwrap();
+
+        assert_eq!(init, expected);
+    }
+
+    #[test]
+    fn test_remove_move_error() {
+        let mut init = Board::default();
+
+        assert_eq!(
+            init.remove_move(&0usize.into()),
+            Err(BoardError::InvalidMove(0))
+        );
+
+        assert_eq!(
+            init.remove_move(&WIDTH.into()),
+            Err(BoardError::OutOfRange(WIDTH))
+        );
+    }
+
+    #[test]
+    fn test_apply_move_out_of_range() {
+        let mut board = Board::default();
+
+        let move_data = BoardMove {
+            column: WIDTH,
+            color: Some(Piece::Yellow),
+        };
+
+        assert_eq!(
+            board.apply_move(&move_data),
+            Err(BoardError::OutOfRange(WIDTH))
+        );
+    }
+
+    #[test]
+    fn test_fill_empty() {
+        let mut board = Board::default();
+
+        assert!(board.is_empty());
+
+        for _ in 0..(HEIGHT * WIDTH) {
+            let move_data = *board.list_moves().first().unwrap();
+
+            assert_eq!(board.whos_to_play(), move_data.color.unwrap());
+
+            board.apply_move(&move_data).unwrap();
+        }
+
+        let move_data = BoardMove {
+            column: 0,
+            color: Some(Piece::Yellow),
+        };
+
+        assert_eq!(
+            board.apply_move(&move_data),
+            Err(BoardError::InvalidMove(0))
+        );
+
+        assert!(board.is_full());
+
+        for _ in 0..HEIGHT {
+            for j in 0..WIDTH {
+                let move_data = BoardMove {
+                    column: j,
+                    color: None,
+                };
+
+                board.remove_move(&move_data).unwrap();
+            }
+        }
+        assert!(board.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod board_move_tests {
+    use super::*;
+
+    #[test]
+    fn test_from_usize_color() {
+        let column = 0;
+        let color = Piece::Red;
+
+        let test = (column, color);
+
+        let test_move: BoardMove = test.into();
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: Some(color)
+            }
+        )
+    }
+
+    #[test]
+    fn test_from_usize() {
+        let column = 0;
+
+        let test_move: BoardMove = column.into();
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: None
+            }
+        )
+    }
+
+    #[test]
+    fn test_from_add_color() {
+        let column = 0;
+        let color = Piece::Red;
+
+        let mut test_move: BoardMove = column.into();
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: None
+            }
+        );
+
+        test_move.add_color(color);
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: Some(color)
+            }
+        );
     }
 }
