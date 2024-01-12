@@ -68,10 +68,11 @@ where
         }
     }
 
-    pub fn walk_start(&mut self, board: &mut B) {
-        let start_depth = self.tree_node_map.get(&board).unwrap().depth;
+    pub fn walk_start(&mut self, mut board: B) {
+        let node = self.tree_node_map.get(&board).unwrap();
+        let start_depth = node.depth;
 
-        self.walk_rec(board, start_depth, 1);
+        self.walk_rec(&mut board, start_depth, 1);
     }
 
     fn walk_rec(&mut self, board: &mut B, start_depth: usize, depth: usize) {
@@ -86,7 +87,7 @@ where
             children: moves.clone(),
         };
 
-        self.tree_node_map.insert(board.clone(), new_node);
+        self.tree_node_map.entry(board.clone()).or_insert(new_node);
 
         // If at depth then we are done
         if depth >= self.walk_depth {
@@ -101,6 +102,33 @@ where
                 .expect("This should never fail as it is only valid moves");
             // * recurse
             self.walk_rec(board, start_depth, depth + 1);
+            // * remove move
+            board
+                .remove_move(&move_data)
+                .expect("This should never fail as it is only valid moves");
+        }
+    }
+
+    pub fn print_from_node(&self, board: &mut B) {
+        let Some(node) = self.tree_node_map.get(&board) else {
+            return;
+        };
+
+        // TODO(ajone239): add in indent prints
+        // println!("{:indent$}Indented text!", "", indent=indent);
+        println!("Board:");
+        println!("{}", board);
+        println!("Node:");
+        println!("{}", node);
+
+        // For each move
+        for move_data in &node.children {
+            // * apply move
+            board
+                .apply_move(&move_data)
+                .expect("This should never fail as it is only valid moves");
+            // * recurse
+            self.print_from_node(board);
             // * remove move
             board
                 .remove_move(&move_data)
