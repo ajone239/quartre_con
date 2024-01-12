@@ -1,4 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display},
+};
 
 use crate::board::board::{Board, BoardMove};
 
@@ -12,15 +15,46 @@ pub trait MovePiece {
     fn list_moves(&self) -> Vec<Self::MoveData>;
 }
 
-#[derive(Debug)]
+pub enum MoM {
+    Min,
+    Max,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub enum GameEvaluation {
-    Win,
     Lose,
     Draw,
-    OnGoing(f64),
+    OnGoing(isize),
+    Win,
+}
+
+impl GameEvaluation {
+    pub fn is_terminal(&self) -> bool {
+        if let Self::OnGoing(_) = self {
+            false
+        } else {
+            true
+        }
+    }
+}
+
+impl Ord for GameEvaluation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Self::Lose, Self::Lose) | (Self::Win, Self::Win) | (Self::Draw, Self::Draw) => {
+                Ordering::Equal
+            }
+            (Self::Lose, _) | (_, Self::Win) => Ordering::Less,
+            (Self::Win, _) | (_, Self::Lose) => Ordering::Greater,
+            (Self::Draw, Self::OnGoing(_)) => Ordering::Less,
+            (Self::OnGoing(_), Self::Draw) => Ordering::Greater,
+            (Self::OnGoing(s), Self::OnGoing(o)) => s.cmp(o),
+        }
+    }
 }
 
 pub trait Evaluate {
+    fn min_or_maxing(&self) -> MoM;
     fn evaluate(&self) -> GameEvaluation;
 }
 

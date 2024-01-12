@@ -5,7 +5,7 @@ use crate::{
         board::{Board, BoardError, BoardMove},
         piece::Piece,
     },
-    game::{MovePiece, Play},
+    game::Play,
     tree::Tree,
 };
 
@@ -23,22 +23,17 @@ impl Display for Bot {
 
 impl Bot {
     pub fn new(color: Piece, board: Board) -> Self {
-        let mut game_tree = Tree::new(board.clone(), 3);
+        let mut game_tree = Tree::new(board.clone(), 7);
         game_tree.walk_start(board);
-
-        println!("{}", game_tree);
 
         Self { color, game_tree }
     }
 }
 
 impl Play for Bot {
-    fn get_move(&mut self, board: Board) -> BoardMove {
+    fn get_move(&mut self, mut board: Board) -> BoardMove {
         self.game_tree.walk_start(board.clone());
-
-        self.game_tree.print_from_node(&mut board.clone());
-
-        board.list_moves().into_iter().next().unwrap()
+        self.game_tree.get_best_move(&mut board)
     }
 
     fn needs_to_see_board(&self) -> bool {

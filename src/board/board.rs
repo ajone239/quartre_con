@@ -6,7 +6,7 @@ use std::{
 use thiserror::Error;
 
 use super::{piece::Piece, square::Square};
-use crate::game::{Evaluate, GameEvaluation, MovePiece};
+use crate::game::{Evaluate, GameEvaluation, MoM, MovePiece};
 
 const HEIGHT: usize = 6;
 const WIDTH: usize = 7;
@@ -170,8 +170,6 @@ impl Board {
                 _ => continue,
             }
         }
-        println!();
-
         SquareResult::Disparate(evals.into_iter().sum())
     }
     fn read_bounded(&self, i: usize, j: usize) -> Option<Piece> {
@@ -187,8 +185,14 @@ impl Board {
 }
 
 impl Evaluate for Board {
+    fn min_or_maxing(&self) -> MoM {
+        match self.whos_to_play() {
+            Piece::Red => MoM::Min,
+            Piece::Yellow => MoM::Max,
+        }
+    }
     fn evaluate(&self) -> crate::game::GameEvaluation {
-        let mut eval = 0.0;
+        let mut eval = 0;
         for (i, row) in self.board.iter().enumerate() {
             for (j, _) in row.iter().enumerate() {
                 let sqres = self.eval_square(i, j);
@@ -196,7 +200,7 @@ impl Evaluate for Board {
                 match sqres {
                     SquareResult::Connect(Piece::Yellow) => return GameEvaluation::Win,
                     SquareResult::Connect(Piece::Red) => return GameEvaluation::Lose,
-                    SquareResult::Disparate(val) => eval += val as f64,
+                    SquareResult::Disparate(val) => eval += val as isize,
                     SquareResult::Empty => (),
                 }
             }
