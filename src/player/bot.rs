@@ -1,14 +1,11 @@
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::fmt::{Debug, Display};
 
 use crate::{
     board::{
         board::{Board, BoardError, BoardMove},
         piece::Piece,
     },
-    game::{GameBoard, Play},
+    game::{MovePiece, Play},
     tree::Tree,
 };
 
@@ -26,9 +23,8 @@ impl Display for Bot {
 
 impl Bot {
     pub fn new(color: Piece, board: Board) -> Self {
-        let mut board = board.clone();
         let mut game_tree = Tree::new(board.clone(), 3);
-        game_tree.walk_start(&mut board);
+        game_tree.walk_start(board);
 
         println!("{}", game_tree);
 
@@ -36,12 +32,12 @@ impl Bot {
     }
 }
 
-impl<B, D, E: Debug> Play<B, D, E> for Bot
-where
-    B: GameBoard<D, E>,
-    D: FromStr,
-{
-    fn get_move(&self, board: &B) -> D {
+impl Play for Bot {
+    fn get_move(&mut self, board: Board) -> BoardMove {
+        self.game_tree.walk_start(board.clone());
+
+        self.game_tree.print_from_node(&mut board.clone());
+
         board.list_moves().into_iter().next().unwrap()
     }
 

@@ -1,7 +1,6 @@
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::fmt::{Debug, Display};
+
+use crate::board::board::{Board, BoardMove};
 
 pub trait MovePiece {
     type MoveData;
@@ -28,47 +27,28 @@ pub trait Evaluate {
 pub trait GameBoard<D, E>: MovePiece<MoveData = D, MoveError = E> + Evaluate + Display {}
 impl<D, E, T: MovePiece<MoveData = D, MoveError = E> + Evaluate + Display> GameBoard<D, E> for T {}
 
-pub trait GamePlayer<B, D, E>: Play<B, D, E> + Display
-where
-    B: GameBoard<D, E> + Display,
-    D: FromStr,
-{
-}
-impl<D: FromStr, E, B: GameBoard<D, E>, T: Play<B, D, E> + Display> GamePlayer<B, D, E> for T {}
-
-pub struct Game<B, D, E>
-where
-    B: GameBoard<D, E>,
-{
-    pub board: B,
-    pub player1: Box<dyn GamePlayer<B, D, E>>,
-    pub player2: Box<dyn GamePlayer<B, D, E>>,
+pub struct Game {
+    pub board: Board,
+    pub player1: Box<dyn Play>,
+    pub player2: Box<dyn Play>,
 }
 
-pub trait Play<B, D, E>
-where
-    B: GameBoard<D, E>,
-    D: FromStr,
-{
-    fn get_move(&self, board: &B) -> D;
+pub trait Play: Display {
+    fn get_move(&mut self, board: Board) -> BoardMove;
     fn needs_to_see_board(&self) -> bool;
     fn should_announce_move(&self) -> bool;
 }
 
-impl<B, D: Debug, E: Debug> Game<B, D, E>
-where
-    B: GameBoard<D, E> + AsRef<B>,
-    D: FromStr,
-{
+impl Game {
     pub fn game_loop(&mut self) {
         loop {
-            for p in &[&self.player1, &self.player2] {
+            for p in &mut [&mut self.player1, &mut self.player2] {
                 if p.needs_to_see_board() {
                     println!("{}", self.board);
                     println!("Please enter your move:");
                 }
 
-                let move_data = p.get_move(self.board.as_ref());
+                let move_data = p.get_move(self.board.clone());
 
                 if p.should_announce_move() {
                     println!("Played {:?}", move_data);

@@ -4,7 +4,10 @@ use std::{
     str::FromStr,
 };
 
-use crate::game::{GameBoard, Play};
+use crate::{
+    board::board::{Board, BoardMove},
+    game::{MovePiece, Play},
+};
 
 #[derive(Debug)]
 pub struct Human {
@@ -17,17 +20,13 @@ impl Display for Human {
     }
 }
 
-impl<B, D, E: Debug> Play<B, D, E> for Human
-where
-    B: GameBoard<D, E>,
-    D: FromStr,
-{
-    fn get_move(&self, board: &B) -> D {
+impl Play for Human {
+    fn get_move(&mut self, board: Board) -> BoardMove {
         let stdin = io::stdin();
         let mut lines = stdin.lines();
 
         while let Some(Ok(line)) = lines.next() {
-            match D::from_str(&line) {
+            match BoardMove::from_str(&line) {
                 Ok(val) => {
                     if !board.is_move_valid(&val) {
                         println!("Invalid Move for current game state.");
