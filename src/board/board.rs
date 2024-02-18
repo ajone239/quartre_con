@@ -134,6 +134,8 @@ impl Board {
             Piece::Red => [-1; 4],
         };
 
+        let mut blocked = [false; 4];
+
         for k in 1..=3 {
             /*
              * *  *  *
@@ -154,12 +156,24 @@ impl Board {
             ];
 
             for (d, (i, j)) in directions.iter().enumerate() {
-                let square = match self.read_bounded(*i, *j) {
-                    Some(Piece::Yellow) => 1,
-                    Some(Piece::Red) => -1,
-                    None => 0,
+                let Some(square) = self.read_bounded(*i, *j) else {
+                    continue;
                 };
-                evals[d] += square;
+
+                let eval = match square {
+                    Piece::Yellow => 1,
+                    Piece::Red => -1,
+                };
+
+                blocked[d] |= square != color;
+
+                evals[d] += eval;
+            }
+        }
+
+        for (e, b) in evals.iter_mut().zip(blocked.iter()) {
+            if *b {
+                *e = 0;
             }
         }
 

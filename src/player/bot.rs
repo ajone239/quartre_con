@@ -23,7 +23,7 @@ impl Display for Bot {
 
 impl Bot {
     pub fn new(color: Piece, board: Board) -> Self {
-        let mut game_tree = Tree::new(board.clone(), 7);
+        let mut game_tree = Tree::new(board.clone(), 5);
         game_tree.walk_start(board);
 
         Self { color, game_tree }
