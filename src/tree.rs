@@ -179,51 +179,42 @@ where
     }
 
     pub fn get_best_move(&self, board: &mut B) -> D {
-        let Some(node) = self.tree_node_map.get(&board) else {
-            panic!("Attempted to use an unwalked board!");
-        };
-        let mut moves_w_evals = vec![];
-        for m in &node.children {
-            let f = |board: &mut _| {
-                moves_w_evals.push((m, self.minimax(board)));
-            };
-            Tree::apply_recurse_remove(board, m, f);
-        }
-
-        match board.min_or_maxing() {
-            MoM::Min => moves_w_evals
-                .into_iter()
-                .min_by(|x, y| x.1.cmp(&y.1))
-                .map(|(m, _)| m)
-                .unwrap()
-                .clone(),
-            MoM::Max => moves_w_evals
-                .into_iter()
-                .max_by(|x, y| x.1.cmp(&y.1))
-                .map(|(m, _)| m)
-                .unwrap()
-                .clone(),
-        }
+        let (_, move_data) = self.minimax(board, None);
+        move_data
     }
 
-    fn minimax(&self, board: &mut B) -> GameEvaluation {
+    fn minimax(&self, board: &mut B, move_data: Option<D>) -> (GameEvaluation, D) {
         let Some(node) = self.tree_node_map.get(&board) else {
             panic!("Attempted to use an unwalked board!");
         };
 
         if node.is_edge || node.is_leaf() {
-            return node.eval;
+            if move_data.is_none() {
+                println!("{board}");
+                println!("{move_data:?}");
+            }
+            let move_data = move_data.expect("Trying to get move for a terminal position!");
+            return (node.eval, move_data);
         }
 
         let mut evals = vec![];
         for move_data in &node.children {
-            let f = |board: &mut _| evals.push(self.minimax(board));
+            let f = |board: &mut _| {
+                let move_data_local = move_data.clone();
+                evals.push(self.minimax(board, Some(move_data_local)));
+            };
             Tree::apply_recurse_remove(board, move_data, f);
         }
 
+        if move_data.is_none() {
+            for (e, d) in evals.iter() {
+                println!("{:?}, {:?}", e, d);
+            }
+        }
+
         match board.min_or_maxing() {
-            MoM::Min => evals.into_iter().min().unwrap(),
-            MoM::Max => evals.into_iter().max().unwrap(),
+            MoM::Max => evals.into_iter().max_by(|x, y| x.0.cmp(&y.0)).unwrap(),
+            MoM::Min => evals.into_iter().min_by(|x, y| x.0.cmp(&y.0)).unwrap(),
         }
     }
 
