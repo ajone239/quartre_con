@@ -6,7 +6,7 @@ use crate::{
         piece::Piece,
     },
     game::Play,
-    tree::Tree,
+    tree::{Algorithm, Tree},
 };
 
 #[derive(Debug)]
@@ -22,8 +22,8 @@ impl Display for Bot {
 }
 
 impl Bot {
-    pub fn new(color: Piece, board: Board) -> Self {
-        let mut game_tree = Tree::new(board.clone(), 5);
+    pub fn new(color: Piece, board: Board, alg: Algorithm) -> Self {
+        let mut game_tree = Tree::new(board.clone(), 5, alg);
         game_tree.walk_start(board);
 
         Self { color, game_tree }

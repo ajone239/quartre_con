@@ -2,14 +2,13 @@ use quatre_con::{
     board::{board::Board, piece::Piece},
     game::Game,
     player::{bot::Bot, human::Human},
+    tree::Algorithm,
 };
 
 fn main() {
     let board = Board::default();
-    let player1 = Human {
-        name: "player1".to_string(),
-    };
-    let player2 = Bot::new(Piece::Red, board.clone());
+    let player1 = Bot::new(Piece::Yellow, board.clone(), Algorithm::AlphaBeta);
+    let player2 = Bot::new(Piece::Red, board.clone(), Algorithm::MiniMax);
 
     let mut g = Game {
         board,

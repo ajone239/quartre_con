@@ -1,5 +1,6 @@
 use core::panic;
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fmt::{Debug, Display},
     hash::Hash,
@@ -10,27 +11,24 @@ use crate::game::{GameBoard, GameEvaluation, MoM};
 
 #[derive(Debug)]
 struct TreeNode<D: Debug + Clone> {
-    eval: GameEvaluation,
     depth: usize,
     is_edge: bool,
     children: Vec<D>,
 }
 
-impl<D: Debug + Clone> TreeNode<D> {
-    fn is_leaf(&self) -> bool {
-        self.eval.is_terminal()
-    }
-}
-
 impl<D: Clone + Debug> Display for TreeNode<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Eval: {:?}", self.eval)?;
         writeln!(f, "Depth: {}", self.depth)?;
-        writeln!(f, "IsLeaf: {}", self.is_leaf())?;
         writeln!(f, "IsEdge: {}", self.is_edge)?;
         writeln!(f, "Children: {:?}", self.children)?;
         Ok(())
     }
+}
+
+#[derive(Debug)]
+pub enum Algorithm {
+    MiniMax,
+    AlphaBeta,
 }
 
 #[derive(Debug)]
@@ -43,6 +41,8 @@ where
     init_position: B,
     tree_node_map: HashMap<B, TreeNode<D>>,
     walk_depth: usize,
+    eval_call_count: RefCell<usize>,
+    alg: Algorithm,
     ghost: PhantomData<E>,
 }
 
@@ -52,16 +52,14 @@ where
     E: Debug,
     B: Hash + Eq + Clone + GameBoard<D, E>,
 {
-    pub fn new(board: B, walk_depth: usize) -> Self {
+    pub fn new(board: B, walk_depth: usize, alg: Algorithm) -> Self {
         let depth = 0;
 
         let mut tree_node_map = HashMap::new();
 
         let moves = board.list_moves();
-        let eval = board.evaluate();
 
         let root = TreeNode {
-            eval,
             depth,
             is_edge: true,
             children: moves,
@@ -75,6 +73,8 @@ where
             init_position,
             tree_node_map,
             walk_depth,
+            eval_call_count: RefCell::new(0),
+            alg,
             ghost: PhantomData::default(),
         }
     }
@@ -89,19 +89,16 @@ where
     fn walk_rec(&mut self, board: &mut B, start_depth: usize, depth: usize) {
         // Get the moves
         let moves = board.list_moves();
-        // TODO(austin) only evaluate leaf nodes!
-        let eval = board.evaluate();
 
         // Insert the board if needed
         let node = self.tree_node_map.entry(board.clone()).or_insert(TreeNode {
-            eval,
             depth: start_depth + depth,
             is_edge: false,
             children: moves.clone(),
         });
 
         // If at depth then we are done
-        if depth >= self.walk_depth || node.is_leaf() {
+        if depth >= self.walk_depth {
             node.is_edge = true;
             return;
         }
@@ -180,9 +177,18 @@ where
     }
 
     pub fn get_best_move(&self, board: &mut B) -> D {
-        let (_, move_data) = self.minimax(board, None);
-        // let (_, move_data) =
-        self.alpha_beta_minimax(board, None, GameEvaluation::Lose, GameEvaluation::Win);
+        *self.eval_call_count.borrow_mut() = 0;
+        let (_, move_data) = match self.alg {
+            Algorithm::MiniMax => self.minimax(board, None),
+            Algorithm::AlphaBeta => {
+                self.alpha_beta_minimax(board, None, GameEvaluation::Lose, GameEvaluation::Win)
+            }
+        };
+
+        let val = *self.eval_call_count.borrow();
+
+        println!("Evaluated {} times with {:?}", val, self.alg);
+
         move_data
     }
 
@@ -192,12 +198,14 @@ where
         };
 
         // Return the nodes eval if it is terminal
-        if node.is_edge || node.is_leaf() {
+        if node.is_edge {
             if move_to_get_here.is_none() {
                 println!("{board}");
             }
             let move_data = move_to_get_here.expect("Trying to get move for a terminal position!");
-            return (node.eval, move_data);
+            let eval = board.evaluate();
+            *self.eval_call_count.borrow_mut() += 1;
+            return (eval, move_data);
         }
 
         // Run minimax on all the children
@@ -262,12 +270,14 @@ where
         };
 
         // Return the nodes eval if it is terminal
-        if node.is_edge || node.is_leaf() {
+        if node.is_edge {
             if move_to_get_here.is_none() {
                 println!("{board}");
             }
             let move_data = move_to_get_here.expect("Trying to get move for a terminal position!");
-            return (node.eval, move_data);
+            let eval = board.evaluate();
+            *self.eval_call_count.borrow_mut() += 1;
+            return (eval, move_data);
         }
 
         let (eval, move_data) = match board.min_or_maxing() {
