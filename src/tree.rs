@@ -36,7 +36,7 @@ impl<D: Clone + Debug> Display for TreeNode<D> {
 #[derive(Debug)]
 pub struct Tree<B, D, E>
 where
-    D: Clone + Debug,
+    D: Clone + Debug + Default,
     E: Debug,
     B: Hash + Eq + Clone + GameBoard<D, E>,
 {
@@ -48,7 +48,7 @@ where
 
 impl<B, D, E> Tree<B, D, E>
 where
-    D: Clone + Debug,
+    D: Clone + Debug + Default,
     E: Debug,
     B: Hash + Eq + Clone + GameBoard<D, E>,
 {
@@ -89,6 +89,7 @@ where
     fn walk_rec(&mut self, board: &mut B, start_depth: usize, depth: usize) {
         // Get the moves
         let moves = board.list_moves();
+        // TODO(austin) only evaluate leaf nodes!
         let eval = board.evaluate();
 
         // Insert the board if needed
@@ -180,54 +181,66 @@ where
 
     pub fn get_best_move(&self, board: &mut B) -> D {
         let (_, move_data) = self.minimax(board, None);
+        // let (_, move_data) =
+        self.alpha_beta_minimax(board, None, GameEvaluation::Lose, GameEvaluation::Win);
         move_data
     }
 
-    fn minimax(&self, board: &mut B, move_data: Option<D>) -> (GameEvaluation, D) {
+    fn minimax(&self, board: &mut B, move_to_get_here: Option<D>) -> (GameEvaluation, D) {
         let Some(node) = self.tree_node_map.get(&board) else {
             panic!("Attempted to use an unwalked board!");
         };
 
+        // Return the nodes eval if it is terminal
         if node.is_edge || node.is_leaf() {
-            if move_data.is_none() {
+            if move_to_get_here.is_none() {
                 println!("{board}");
-                println!("{move_data:?}");
             }
-            let move_data = move_data.expect("Trying to get move for a terminal position!");
+            let move_data = move_to_get_here.expect("Trying to get move for a terminal position!");
             return (node.eval, move_data);
         }
 
+        // Run minimax on all the children
         let mut evals = vec![];
-        for move_data in &node.children {
-            let f = |board: &mut _| {
-                let move_data_local = move_data.clone();
-                evals.push(self.minimax(board, Some(move_data_local)));
+        for m in &node.children {
+            // In the recursion call minimax again and push the result to a local evals vector
+            let f = |board: &mut _, move_data: &D| {
+                evals.push(self.minimax(board, Some(move_data.clone())));
             };
-            Tree::apply_recurse_remove(board, move_data, f);
+
+            // Recurse Recurse
+            Tree::apply_recurse_remove(board, m, f);
         }
 
-        if move_data.is_none() {
-            for (e, d) in evals.iter() {
-                println!("{:?}, {:?}", e, d);
-            }
-        }
-
-        match board.min_or_maxing() {
+        // Get the best eval for us
+        // and get the move associated as we _might_ need it
+        let (eval, move_data) = match board.min_or_maxing() {
             MoM::Max => evals.into_iter().max_by(|x, y| x.0.cmp(&y.0)).unwrap(),
             MoM::Min => evals.into_iter().min_by(|x, y| x.0.cmp(&y.0)).unwrap(),
-        }
+        };
+
+        // If `move_to_get_here` is None then we know that `get_best_move()` called it
+        // so we know to use the move that we found not that we were told.
+        //
+        // Otherwise use the move that we were told as it is correct.
+        let ret_move = match move_to_get_here {
+            Some(m) => m,
+            None => move_data,
+        };
+
+        (eval, ret_move)
     }
 
     fn apply_recurse_remove<T, F>(board: &mut B, move_data: &D, f: F) -> T
     where
-        F: FnOnce(&mut B) -> T,
+        F: FnOnce(&mut B, &D) -> T,
     {
         // * apply move
         board
             .apply_move(&move_data)
             .expect("This should never fail as it is only valid moves");
         // * recurse
-        let result = f(board);
+        let result = f(board, move_data);
         // * remove move
         board
             .remove_move(&move_data)
@@ -235,11 +248,94 @@ where
 
         result
     }
+
+    fn alpha_beta_minimax(
+        &self,
+        board: &mut B,
+        move_to_get_here: Option<D>,
+        mut alpha: GameEvaluation,
+        mut beta: GameEvaluation,
+    ) -> (GameEvaluation, D) {
+        // Grab the node
+        let Some(node) = self.tree_node_map.get(&board) else {
+            panic!("Attempted to use an unwalked board!");
+        };
+
+        // Return the nodes eval if it is terminal
+        if node.is_edge || node.is_leaf() {
+            if move_to_get_here.is_none() {
+                println!("{board}");
+            }
+            let move_data = move_to_get_here.expect("Trying to get move for a terminal position!");
+            return (node.eval, move_data);
+        }
+
+        let (eval, move_data) = match board.min_or_maxing() {
+            MoM::Max => {
+                // Min val for max
+                let mut eval: GameEvaluation = GameEvaluation::Lose;
+                let mut move_data: D = Default::default();
+
+                for m in node.children.iter() {
+                    board.apply_move(m).unwrap();
+                    let (temp_eval, temp_move_data) =
+                        self.alpha_beta_minimax(board, Some(m.clone()), alpha, beta);
+                    board.remove_move(m).unwrap();
+
+                    if temp_eval > eval {
+                        eval = temp_eval;
+                        move_data = temp_move_data;
+                    }
+
+                    alpha = GameEvaluation::max(alpha, eval);
+
+                    if beta <= alpha {
+                        break;
+                    }
+                }
+                (eval, move_data)
+            }
+            MoM::Min => {
+                // Max val for min
+                let mut eval: GameEvaluation = GameEvaluation::Win;
+                let mut move_data: D = Default::default();
+
+                for m in node.children.iter() {
+                    board.apply_move(m).unwrap();
+                    let (temp_eval, temp_move_data) =
+                        self.alpha_beta_minimax(board, Some(m.clone()), alpha, beta);
+                    board.remove_move(m).unwrap();
+
+                    if temp_eval < eval {
+                        eval = temp_eval;
+                        move_data = temp_move_data;
+                    }
+                    beta = GameEvaluation::min(beta, eval);
+
+                    if beta <= alpha {
+                        break;
+                    }
+                }
+                (eval, move_data)
+            }
+        };
+
+        // If `move_to_get_here` is None then we know that `get_best_move()` called it
+        // so we know to use the move that we found not that we were told.
+        //
+        // Otherwise use the move that we were told as it is correct.
+        let ret_move = match move_to_get_here {
+            Some(m) => m,
+            None => move_data,
+        };
+
+        (eval, ret_move)
+    }
 }
 
 impl<B, D, E> Display for Tree<B, D, E>
 where
-    D: Clone + Debug,
+    D: Clone + Debug + Default,
     E: Debug,
     B: Hash + Eq + Clone + GameBoard<D, E>,
 {

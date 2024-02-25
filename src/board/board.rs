@@ -27,7 +27,7 @@ enum SquareResult {
     Empty,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub struct BoardMove {
     column: usize,
     color: Option<Piece>,
