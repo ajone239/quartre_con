@@ -39,3 +39,67 @@ impl FromStr for BoardMove {
         Ok(column.into())
     }
 }
+
+#[cfg(test)]
+mod board_move_tests {
+    use super::*;
+
+    #[test]
+    fn test_from_usize_color() {
+        let column = 0;
+        let color = Piece::Red;
+
+        let test = (column, color);
+
+        let test_move: BoardMove = test.into();
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: Some(color)
+            }
+        )
+    }
+
+    #[test]
+    fn test_from_usize() {
+        let column = 0;
+
+        let test_move: BoardMove = column.into();
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: None
+            }
+        )
+    }
+
+    #[test]
+    fn test_from_add_color() {
+        let column = 0;
+        let color = Piece::Red;
+
+        let mut test_move: BoardMove = column.into();
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: None
+            }
+        );
+
+        test_move.add_color(color);
+
+        assert_eq!(
+            test_move,
+            BoardMove {
+                column,
+                color: Some(color)
+            }
+        );
+    }
+}
