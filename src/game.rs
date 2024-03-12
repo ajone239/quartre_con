@@ -55,7 +55,7 @@ impl Ord for GameEvaluation {
 
 pub trait Evaluate {
     fn min_or_maxing(&self) -> MoM;
-    fn evaluate(&self) -> GameEvaluation;
+    fn evaluate(&mut self) -> GameEvaluation;
 }
 
 pub trait GameBoard<D, E>: MovePiece<MoveData = D, MoveError = E> + Evaluate + Display {}
@@ -76,43 +76,60 @@ pub trait Play: Display {
 impl Game {
     pub fn game_loop(&mut self) {
         loop {
-            for p in &mut [&mut self.player1, &mut self.player2] {
-                if p.needs_to_see_board() {
-                    println!("{}", self.board);
-                    println!("Please enter your move:");
-                }
+            self.game_loops();
+        }
+    }
 
-                let move_data = p.get_move(self.board.clone());
+    fn game_loops(&mut self) {
+        for player_num in &[1, 2] {
+            self.player_loop(*player_num);
+        }
+    }
 
-                if p.should_announce_move() {
-                    println!("Played {:?}", move_data);
-                }
+    fn player_loop(&mut self, player_num: u32) {
+        let p = match player_num {
+            1 => &mut self.player1,
+            2 => &mut self.player2,
+            _ => unreachable!(),
+        };
+        if p.needs_to_see_board() {
+            println!("{}", self.board);
+            println!("Please enter your move:");
+        }
 
-                self.board.apply_move(&move_data).unwrap();
+        let move_data = p.get_move(self.board.clone());
 
-                let eval = self.board.evaluate();
+        if p.should_announce_move() {
+            println!("Played {:?}", move_data);
+        }
 
-                match eval {
-                    GameEvaluation::Win => {
-                        print_boardered(&format!("{} beat {}!", self.player1, self.player2));
-                        println!("{}", self.board);
-                        return;
-                    }
-                    GameEvaluation::Lose => {
-                        print_boardered(&format!("{} beat {}!", self.player2, self.player1));
-                        println!("{}", self.board);
-                        return;
-                    }
-                    GameEvaluation::Draw => {
-                        print_boardered("It's a Draw!");
-                        println!("{}", self.board);
-                        return;
-                    }
-                    GameEvaluation::OnGoing(val) => {
-                        println!("The game continues with the eval {}.", val);
-                        println!();
-                    }
-                }
+        self.board.apply_move(&move_data).unwrap();
+
+        println!();
+        println!();
+
+        println!("Evaluating current board state");
+        let eval = self.board.evaluate();
+
+        match eval {
+            GameEvaluation::Win => {
+                print_boardered(&format!("{} beat {}!", self.player1, self.player2));
+                println!("{}", self.board);
+                return;
+            }
+            GameEvaluation::Lose => {
+                print_boardered(&format!("{} beat {}!", self.player2, self.player1));
+                println!("{}", self.board);
+                return;
+            }
+            GameEvaluation::Draw => {
+                print_boardered("It's a Draw!");
+                println!("{}", self.board);
+                return;
+            }
+            GameEvaluation::OnGoing(val) => {
+                println!("The game continues with the eval {}.", val);
+                println!();
             }
         }
     }
