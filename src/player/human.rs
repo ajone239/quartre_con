@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    board::board::{Board, BoardMove},
+    board::{board::Board, board_move::BoardMove},
     game::{MovePiece, Play},
 };
 

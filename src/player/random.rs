@@ -2,10 +2,7 @@ use rand::seq::IteratorRandom;
 use std::fmt::{Debug, Display};
 
 use crate::{
-    board::{
-        board::{Board, BoardMove},
-        piece::Piece,
-    },
+    board::{board::Board, board_move::BoardMove, piece::Piece},
     game::{MovePiece, Play},
 };
 

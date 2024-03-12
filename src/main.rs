@@ -10,7 +10,7 @@ fn main() {
     let player1 = Human {
         name: "player1".to_string(),
     };
-    let player2 = Bot::new(Piece::Red, board.clone(), Algorithm::MiniMax);
+    let player2 = Bot::new(Piece::Red, board.clone(), Algorithm::AlphaBeta);
 
     let mut g = Game {
         board,

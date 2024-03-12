@@ -2,7 +2,8 @@ use std::fmt::{Debug, Display};
 
 use crate::{
     board::{
-        board::{Board, BoardError, BoardMove},
+        board::{Board, BoardError},
+        board_move::BoardMove,
         piece::Piece,
     },
     game::Play,

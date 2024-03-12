@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use crate::board::board::{Board, BoardMove};
+use crate::board::{board::Board, board_move::BoardMove};
 
 pub trait MovePiece {
     type MoveData;

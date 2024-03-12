@@ -1,11 +1,8 @@
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::fmt::{Debug, Display};
 
 use thiserror::Error;
 
-use super::{piece::Piece, square::Square};
+use super::{board_move::BoardMove, piece::Piece, square::Square};
 use crate::game::{Evaluate, GameEvaluation, MoM, MovePiece};
 
 const HEIGHT: usize = 6;
@@ -25,44 +22,6 @@ enum SquareResult {
     Connect(Piece),
     Disparate(i64),
     Empty,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Default)]
-pub struct BoardMove {
-    column: usize,
-    color: Option<Piece>,
-}
-
-impl BoardMove {
-    pub fn add_color(&mut self, color: Piece) {
-        self.color = Some(color);
-    }
-}
-
-impl From<(usize, Piece)> for BoardMove {
-    fn from(value: (usize, Piece)) -> Self {
-        BoardMove {
-            column: value.0,
-            color: Some(value.1),
-        }
-    }
-}
-
-impl From<usize> for BoardMove {
-    fn from(value: usize) -> Self {
-        BoardMove {
-            column: value,
-            color: None,
-        }
-    }
-}
-
-impl FromStr for BoardMove {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let column = s.parse::<usize>()?;
-        Ok(column.into())
-    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
@@ -209,9 +168,9 @@ impl Evaluate for Board {
         let mut eval = 0;
         for (i, row) in self.board.iter().enumerate() {
             for (j, _) in row.iter().enumerate() {
-                let sqres = self.eval_square(i, j);
+                let squares = self.eval_square(i, j);
 
-                match sqres {
+                match squares {
                     SquareResult::Connect(Piece::Yellow) => return GameEvaluation::Win,
                     SquareResult::Connect(Piece::Red) => return GameEvaluation::Lose,
                     SquareResult::Disparate(val) => eval += val as isize,

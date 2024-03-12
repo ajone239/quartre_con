@@ -178,6 +178,7 @@ where
 
     pub fn get_best_move(&self, board: &mut B) -> D {
         *self.eval_call_count.borrow_mut() = 0;
+
         let (_, move_data) = match self.alg {
             Algorithm::MiniMax => self.minimax(board, None),
             Algorithm::AlphaBeta => {
