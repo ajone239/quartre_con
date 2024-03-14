@@ -267,6 +267,7 @@ where
     ) -> (GameEvaluation, D) {
         // Grab the node
         let Some(node) = self.tree_node_map.get(&board) else {
+            println!("{}", board);
             panic!("Attempted to use an unwalked board!");
         };
 
