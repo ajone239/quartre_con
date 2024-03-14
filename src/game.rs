@@ -55,7 +55,7 @@ impl Ord for GameEvaluation {
 
 pub trait Evaluate {
     fn min_or_maxing(&self) -> MoM;
-    fn evaluate(&mut self) -> GameEvaluation;
+    fn evaluate(&self) -> GameEvaluation;
 }
 
 pub trait GameBoard<D, E>: MovePiece<MoveData = D, MoveError = E> + Evaluate + Display {}
@@ -76,17 +76,24 @@ pub trait Play: Display {
 impl Game {
     pub fn game_loop(&mut self) {
         loop {
-            self.game_loops();
+            let done = self.game_loops();
+            if done {
+                break;
+            }
         }
     }
 
-    fn game_loops(&mut self) {
+    fn game_loops(&mut self) -> bool {
         for player_num in &[1, 2] {
-            self.player_loop(*player_num);
+            let done = self.player_loop(*player_num);
+            if done {
+                return done;
+            }
         }
+        false
     }
 
-    fn player_loop(&mut self, player_num: u32) {
+    fn player_loop(&mut self, player_num: u32) -> bool {
         let p = match player_num {
             1 => &mut self.player1,
             2 => &mut self.player2,
@@ -115,21 +122,22 @@ impl Game {
             GameEvaluation::Win => {
                 print_boardered(&format!("{} beat {}!", self.player1, self.player2));
                 println!("{}", self.board);
-                return;
+                true
             }
             GameEvaluation::Lose => {
                 print_boardered(&format!("{} beat {}!", self.player2, self.player1));
                 println!("{}", self.board);
-                return;
+                true
             }
             GameEvaluation::Draw => {
                 print_boardered("It's a Draw!");
                 println!("{}", self.board);
-                return;
+                true
             }
             GameEvaluation::OnGoing(val) => {
                 println!("The game continues with the eval {}.", val);
                 println!();
+                false
             }
         }
     }
