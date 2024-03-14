@@ -1,4 +1,8 @@
-use std::fmt::{Debug, Display};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display},
+    hash::{Hash, Hasher},
+};
 
 use thiserror::Error;
 
@@ -20,14 +24,30 @@ pub enum BoardError {
 
 enum SquareResult {
     Connect(Piece),
-    Disparate(i64),
-    Empty,
+    Disparate(i64, Vec<Threat>),
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Threat {
+    i: usize,
+    j: usize,
+    color: Piece,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Board {
     board: [[Square; WIDTH]; HEIGHT],
+    threats: HashSet<Threat>,
     turn_count: usize,
+}
+
+impl Hash for Board {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.board.hash(state);
+    }
 }
 
 impl AsRef<Board> for Board {
@@ -63,7 +83,11 @@ impl Board {
             }
         }
 
-        Self { board, turn_count }
+        Self {
+            board,
+            threats: HashSet::new(),
+            turn_count,
+        }
     }
 
     #[allow(dead_code)]
@@ -84,14 +108,13 @@ impl Board {
     }
 
     fn eval_square(&self, i: usize, j: usize) -> SquareResult {
-        let Square::NonEmpty(color) = self.board[i][j] else {
-            return SquareResult::Empty;
+        let mut evals: [i64; 4] = match self.board[i][j] {
+            Square::NonEmpty(Piece::Yellow) => [1; 4],
+            Square::NonEmpty(Piece::Red) => [-1; 4],
+            Square::Empty => [0; 4],
         };
 
-        let mut evals = match color {
-            Piece::Yellow => [1; 4],
-            Piece::Red => [-1; 4],
-        };
+        let mut threats = vec![vec![], vec![], vec![], vec![]];
 
         let mut blocked = [false; 4];
 
@@ -116,15 +139,18 @@ impl Board {
 
             for (d, (i, j)) in directions.iter().enumerate() {
                 let Some(square) = self.read_bounded(*i, *j) else {
+                    threats[d].push((*i, *j));
                     continue;
                 };
 
-                let eval = match square {
+                let eval: i64 = match square {
                     Piece::Yellow => 1,
                     Piece::Red => -1,
                 };
 
-                blocked[d] |= square != color;
+                // Does the new eval match the sign of what we've seen up to now.
+                // Even if the sign switches the |= won't overright the blocking.
+                blocked[d] |= eval.signum() != evals[d].signum() && evals[d].signum() != 0;
 
                 evals[d] += eval;
             }
@@ -143,8 +169,25 @@ impl Board {
                 _ => continue,
             }
         }
-        SquareResult::Disparate(evals.into_iter().sum())
+
+        let mut ret_threats = vec![];
+        for (d, e) in evals.iter().enumerate() {
+            let color = match e {
+                3 => Piece::Yellow,
+                -3 => Piece::Red,
+                _ => continue,
+            };
+            if threats[d].is_empty() {
+                ret_threats.push(Threat { i, j, color })
+            } else {
+                let (i, j) = threats[d][0];
+                ret_threats.push(Threat { i, j, color })
+            }
+        }
+
+        SquareResult::Disparate(evals.into_iter().sum(), ret_threats)
     }
+
     fn read_bounded(&self, i: usize, j: usize) -> Option<Piece> {
         if i >= HEIGHT || j >= WIDTH {
             return None;
@@ -153,6 +196,22 @@ impl Board {
         match self.board[i][j] {
             Square::Empty => None,
             Square::NonEmpty(color) => Some(color),
+        }
+    }
+    pub fn clear_threats(&mut self) {
+        self.threats.clear();
+    }
+    pub fn calculate_threats(&mut self) {
+        for (i, row) in self.board.iter().enumerate() {
+            for (j, _) in row.iter().enumerate() {
+                let squares = self.eval_square(i, j);
+
+                if let SquareResult::Disparate(_, threats) = squares {
+                    for t in threats {
+                        self.threats.insert(t);
+                    }
+                }
+            }
         }
     }
 }
@@ -173,8 +232,7 @@ impl Evaluate for Board {
                 match squares {
                     SquareResult::Connect(Piece::Yellow) => return GameEvaluation::Win,
                     SquareResult::Connect(Piece::Red) => return GameEvaluation::Lose,
-                    SquareResult::Disparate(val) => eval += val as isize,
-                    SquareResult::Empty => (),
+                    SquareResult::Disparate(val, _) => eval += val as isize,
                 }
             }
         }
@@ -268,10 +326,17 @@ impl MovePiece for Board {
 
 impl Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for row in self.board.iter().rev() {
+        for (r, row) in self.board.iter().enumerate().rev() {
             write!(f, "|")?;
-            for cell in row {
-                write!(f, " {}", cell)?;
+            for (c, cell) in row.iter().enumerate() {
+                if let Some(threat) = self.threats.iter().find(|t| t.i == r && t.j == c) {
+                    match threat.color {
+                        Piece::Yellow => write!(f, " y")?,
+                        Piece::Red => write!(f, " r")?,
+                    }
+                } else {
+                    write!(f, " {}", cell)?;
+                }
             }
             writeln!(f, " |")?;
         }

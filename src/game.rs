@@ -100,7 +100,9 @@ impl Game {
             _ => unreachable!(),
         };
         if p.needs_to_see_board() {
+            self.board.calculate_threats();
             println!("{}", self.board);
+            self.board.clear_threats();
             println!("Please enter your move:");
         }
 
