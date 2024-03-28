@@ -22,10 +22,12 @@ pub enum MoM {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub enum GameEvaluation {
+    MinusInfinity,
     Lose,
     Draw,
     OnGoing(isize),
     Win,
+    PlusInfinity,
 }
 
 impl GameEvaluation {
@@ -41,6 +43,8 @@ impl GameEvaluation {
 impl Ord for GameEvaluation {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
+            (Self::MinusInfinity, _) | (_, Self::PlusInfinity) => Ordering::Less,
+            (Self::PlusInfinity, _) | (_, Self::MinusInfinity) => Ordering::Greater,
             (Self::Lose, Self::Lose) | (Self::Win, Self::Win) | (Self::Draw, Self::Draw) => {
                 Ordering::Equal
             }
@@ -55,7 +59,7 @@ impl Ord for GameEvaluation {
 
 pub trait Evaluate {
     fn min_or_maxing(&self) -> MoM;
-    fn evaluate(&self) -> GameEvaluation;
+    fn evaluate(&self, use_threats: bool) -> GameEvaluation;
 }
 
 pub trait GameBoard<D, E>: MovePiece<MoveData = D, MoveError = E> + Evaluate + Display {}
@@ -112,13 +116,25 @@ impl Game {
             println!("Played {:?}", move_data);
         }
 
-        self.board.apply_move(&move_data).unwrap();
+        let move_result = self.board.apply_move(&move_data);
+        match move_result {
+            Ok(t) => t,
+            Err(e) => {
+                println!(
+                    "Move {:?} for player {} failed becuase: {:?}.",
+                    move_data, p, e
+                );
+                println!("Exiting");
+                println!("{}", self.board);
+                return true;
+            }
+        };
 
         println!();
         println!();
 
         println!("Evaluating current board state");
-        let eval = self.board.evaluate();
+        let eval = self.board.evaluate(false);
 
         match eval {
             GameEvaluation::Win => {
@@ -140,6 +156,11 @@ impl Game {
                 println!("The game continues with the eval {}.", val);
                 println!();
                 false
+            }
+            _ => {
+                println!("Invalid state");
+                println!();
+                true
             }
         }
     }

@@ -27,10 +27,10 @@ enum SquareResult {
     Disparate(i64, Vec<Threat>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Threat {
-    i: usize,
-    j: usize,
+    column: usize,
+    row: usize,
     color: Piece,
 }
 
@@ -99,6 +99,28 @@ impl Board {
         !self.board.iter().any(|r| r.iter().any(|c| c.is_empty()))
     }
 
+    fn is_even(&self) -> bool {
+        self.moves_left().into_iter().all(|count| count & 1 == 0)
+    }
+
+    fn moves_left(&self) -> [usize; WIDTH] {
+        let column_counts = (0..WIDTH)
+            .map(|column_index| self.board.iter().map(move |row| row[column_index]))
+            .map(|column| {
+                column
+                    .into_iter()
+                    .filter(|square| square.is_empty())
+                    .count()
+            });
+
+        let mut rv = [0; WIDTH];
+
+        for (c, i) in column_counts.enumerate() {
+            rv[i] = c;
+        }
+        rv
+    }
+
     fn whos_to_play(&self) -> Piece {
         if self.turn_count & 1 == 0 {
             Piece::Yellow
@@ -114,10 +136,53 @@ impl Board {
             Square::Empty => [0; 4],
         };
 
-        let mut threats = vec![vec![], vec![], vec![], vec![]];
+        let mut threats = [
+            Vec::with_capacity(3),
+            Vec::with_capacity(3),
+            Vec::with_capacity(3),
+            Vec::with_capacity(3),
+        ];
 
         let mut blocked = [false; 4];
 
+        // Get the buisness done
+        self.sum_eval_square_mask(i, j, &mut evals, &mut blocked, &mut threats);
+
+        let mut ret_threats = vec![];
+        for (d, e) in evals.iter().enumerate() {
+            if blocked[d] {
+                continue;
+            }
+            let color = match e {
+                4 => return SquareResult::Connect(Piece::Yellow),
+                -4 => return SquareResult::Connect(Piece::Red),
+                3 => Piece::Yellow,
+                -3 => Piece::Red,
+                _ => continue,
+            };
+            let (i, j) = if threats[d].is_empty() {
+                (i, j)
+            } else {
+                threats[d][0]
+            };
+            ret_threats.push(Threat {
+                row: i,
+                column: j,
+                color,
+            })
+        }
+
+        SquareResult::Disparate(evals.into_iter().sum(), ret_threats)
+    }
+
+    fn sum_eval_square_mask(
+        &self,
+        i: usize,
+        j: usize,
+        evals: &mut [i64; 4],
+        blocked: &mut [bool; 4],
+        threats: &mut [Vec<(usize, usize)>; 4],
+    ) {
         for k in 1..=3 {
             /*
              * *  *  *
@@ -138,6 +203,9 @@ impl Board {
             ];
 
             for (d, (i, j)) in directions.iter().enumerate() {
+                if !self.is_in_bounds(*i, *j) {
+                    continue;
+                }
                 let Some(square) = self.read_bounded(*i, *j) else {
                     threats[d].push((*i, *j));
                     continue;
@@ -155,41 +223,14 @@ impl Board {
                 evals[d] += eval;
             }
         }
+    }
 
-        for (e, b) in evals.iter_mut().zip(blocked.iter()) {
-            if *b {
-                *e = 0;
-            }
-        }
-
-        for e in evals {
-            match e {
-                4 => return SquareResult::Connect(Piece::Yellow),
-                -4 => return SquareResult::Connect(Piece::Red),
-                _ => continue,
-            }
-        }
-
-        let mut ret_threats = vec![];
-        for (d, e) in evals.iter().enumerate() {
-            let color = match e {
-                3 => Piece::Yellow,
-                -3 => Piece::Red,
-                _ => continue,
-            };
-            if threats[d].is_empty() {
-                ret_threats.push(Threat { i, j, color })
-            } else {
-                let (i, j) = threats[d][0];
-                ret_threats.push(Threat { i, j, color })
-            }
-        }
-
-        SquareResult::Disparate(evals.into_iter().sum(), ret_threats)
+    fn is_in_bounds(&self, i: usize, j: usize) -> bool {
+        i < HEIGHT && j < WIDTH
     }
 
     fn read_bounded(&self, i: usize, j: usize) -> Option<Piece> {
-        if i >= HEIGHT || j >= WIDTH {
+        if !self.is_in_bounds(i, j) {
             return None;
         }
 
@@ -198,9 +239,11 @@ impl Board {
             Square::NonEmpty(color) => Some(color),
         }
     }
+
     pub fn clear_threats(&mut self) {
         self.threats.clear();
     }
+
     pub fn calculate_threats(&mut self) {
         for (i, row) in self.board.iter().enumerate() {
             for (j, _) in row.iter().enumerate() {
@@ -214,6 +257,59 @@ impl Board {
             }
         }
     }
+
+    fn process_threats(&self, threat_board: [[Option<Threat>; HEIGHT]; WIDTH]) -> isize {
+        let mut adjustment = 0;
+        for col in threat_board {
+            // The first threat that will be seen in the column
+            let mut first_threat = None;
+            // The same, but stacked
+            let mut stacked_threat = None;
+
+            // Go throught all the pairs of indexes backwards
+            for w in (0..HEIGHT).collect::<Vec<usize>>().windows(2).rev() {
+                let [less, more] = w else {
+                    continue;
+                };
+                let Some(bot_threat) = &col[*less] else {
+                    continue;
+                };
+
+                first_threat = Some(bot_threat);
+
+                let Some(top_threat) = &col[*more] else {
+                    continue;
+                };
+
+                if top_threat.color == bot_threat.color {
+                    stacked_threat = Some(bot_threat)
+                }
+            }
+            let first = match first_threat {
+                Some(t) => {
+                    let adj = match t.color {
+                        Piece::Yellow => 10,
+                        Piece::Red => -10,
+                    };
+                    adjustment += adj;
+                    t
+                }
+                None => continue,
+            };
+            let Some(stacked) = stacked_threat else {
+                continue;
+            };
+            if stacked.row > first.row {
+                continue;
+            }
+            let adj = match stacked.color {
+                Piece::Yellow => 30,
+                Piece::Red => -30,
+            };
+            adjustment += adj;
+        }
+        adjustment
+    }
 }
 
 impl Evaluate for Board {
@@ -223,8 +319,9 @@ impl Evaluate for Board {
             Piece::Yellow => MoM::Max,
         }
     }
-    fn evaluate(&self) -> crate::game::GameEvaluation {
+    fn evaluate(&self, use_threats: bool) -> crate::game::GameEvaluation {
         let mut eval = 0;
+        let mut threats_set = [[None; HEIGHT]; WIDTH];
         for (i, row) in self.board.iter().enumerate() {
             for (j, _) in row.iter().enumerate() {
                 let squares = self.eval_square(i, j);
@@ -232,7 +329,15 @@ impl Evaluate for Board {
                 match squares {
                     SquareResult::Connect(Piece::Yellow) => return GameEvaluation::Win,
                     SquareResult::Connect(Piece::Red) => return GameEvaluation::Lose,
-                    SquareResult::Disparate(val, _) => eval += val as isize,
+                    SquareResult::Disparate(val, threats) => {
+                        // zip threat
+                        for t in threats {
+                            let r = t.row;
+                            let c = t.column;
+                            threats_set[c][r] = Some(t);
+                        }
+                        eval += val as isize;
+                    }
                 }
             }
         }
@@ -241,6 +346,12 @@ impl Evaluate for Board {
             return GameEvaluation::Draw;
         }
 
+        if use_threats {
+            let threat_adjustment = self.process_threats(threats_set);
+            eval += threat_adjustment;
+        }
+
+        // Process threats
         GameEvaluation::OnGoing(eval)
     }
 }
@@ -329,13 +440,14 @@ impl Display for Board {
         for (r, row) in self.board.iter().enumerate().rev() {
             write!(f, "|")?;
             for (c, cell) in row.iter().enumerate() {
-                if let Some(threat) = self.threats.iter().find(|t| t.i == r && t.j == c) {
-                    match threat.color {
+                match self.threats.iter().find(|t| t.row == r && t.column == c) {
+                    Some(threat) => match threat.color {
                         Piece::Yellow => write!(f, " y")?,
                         Piece::Red => write!(f, " r")?,
+                    },
+                    None => {
+                        write!(f, " {}", cell)?;
                     }
-                } else {
-                    write!(f, " {}", cell)?;
                 }
             }
             writeln!(f, " |")?;
