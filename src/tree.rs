@@ -43,6 +43,7 @@ where
     walk_depth: usize,
     eval_call_count: RefCell<usize>,
     alg: Algorithm,
+    use_threats: bool,
     ghost: PhantomData<E>,
 }
 
@@ -52,7 +53,7 @@ where
     E: Debug,
     B: Hash + Eq + Clone + GameBoard<D, E>,
 {
-    pub fn new(board: B, walk_depth: usize, alg: Algorithm) -> Self {
+    pub fn new(board: B, walk_depth: usize, alg: Algorithm, use_threats: bool) -> Self {
         let depth = 0;
 
         let mut tree_node_map = HashMap::new();
@@ -75,6 +76,7 @@ where
             walk_depth,
             eval_call_count: RefCell::new(0),
             alg,
+            use_threats,
             ghost: PhantomData::default(),
         }
     }
@@ -179,6 +181,12 @@ where
     pub fn get_best_move(&self, board: &mut B) -> D {
         *self.eval_call_count.borrow_mut() = 0;
 
+        let moves = board.list_moves();
+
+        if moves.len() == 1 {
+            return moves[0].clone();
+        }
+
         let (_, move_data) = match self.alg {
             Algorithm::MiniMax => self.minimax(board, None),
             Algorithm::AlphaBeta => {
@@ -204,7 +212,7 @@ where
                 println!("{board}");
             }
             let move_data = move_to_get_here.expect("Trying to get move for a terminal position!");
-            let eval = board.evaluate();
+            let eval = board.evaluate(self.use_threats);
             *self.eval_call_count.borrow_mut() += 1;
             return (eval, move_data);
         }
@@ -277,7 +285,7 @@ where
                 println!("{board}");
             }
             let move_data = move_to_get_here.expect("Trying to get move for a terminal position!");
-            let eval = board.evaluate();
+            let eval = board.evaluate(self.use_threats);
             *self.eval_call_count.borrow_mut() += 1;
             return (eval, move_data);
         }
@@ -285,7 +293,7 @@ where
         let (eval, move_data) = match board.min_or_maxing() {
             MoM::Max => {
                 // Min val for max
-                let mut eval: GameEvaluation = GameEvaluation::Lose;
+                let mut eval: GameEvaluation = GameEvaluation::MinusInfinity;
                 let mut move_data: D = Default::default();
 
                 for m in node.children.iter() {
@@ -309,7 +317,7 @@ where
             }
             MoM::Min => {
                 // Max val for min
-                let mut eval: GameEvaluation = GameEvaluation::Win;
+                let mut eval: GameEvaluation = GameEvaluation::PlusInfinity;
                 let mut move_data: D = Default::default();
 
                 for m in node.children.iter() {
