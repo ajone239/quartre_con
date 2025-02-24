@@ -39,6 +39,7 @@ pub struct Board {
     board: [[Square; WIDTH]; HEIGHT],
     threats: HashSet<Threat>,
     turn_count: usize,
+    show_threats: bool,
 }
 
 impl Hash for Board {
@@ -57,8 +58,19 @@ impl AsRef<Board> for Board {
 }
 
 impl Board {
+    pub fn new(show_threats: bool) -> Self {
+        let turn_count = 0;
+        let board = [[Square::Empty; WIDTH]; HEIGHT];
+
+        Self {
+            board,
+            threats: HashSet::new(),
+            turn_count,
+            show_threats,
+        }
+    }
     #[cfg(test)]
-    fn new(board_str: &str) -> Self {
+    fn from_str(board_str: &str) -> Self {
         let rows: Vec<&str> = board_str.split('\n').collect();
 
         let mut turn_count = 0;
@@ -87,6 +99,7 @@ impl Board {
             board,
             threats: HashSet::new(),
             turn_count,
+            show_threats: false,
         }
     }
 
@@ -97,28 +110,6 @@ impl Board {
 
     fn is_full(&self) -> bool {
         !self.board.iter().any(|r| r.iter().any(|c| c.is_empty()))
-    }
-
-    fn is_even(&self) -> bool {
-        self.moves_left().into_iter().all(|count| count & 1 == 0)
-    }
-
-    fn moves_left(&self) -> [usize; WIDTH] {
-        let column_counts = (0..WIDTH)
-            .map(|column_index| self.board.iter().map(move |row| row[column_index]))
-            .map(|column| {
-                column
-                    .into_iter()
-                    .filter(|square| square.is_empty())
-                    .count()
-            });
-
-        let mut rv = [0; WIDTH];
-
-        for (c, i) in column_counts.enumerate() {
-            rv[i] = c;
-        }
-        rv
     }
 
     fn whos_to_play(&self) -> Piece {
@@ -440,12 +431,14 @@ impl Display for Board {
         for (r, row) in self.board.iter().enumerate().rev() {
             write!(f, "|")?;
             for (c, cell) in row.iter().enumerate() {
-                match self.threats.iter().find(|t| t.row == r && t.column == c) {
-                    Some(threat) => match threat.color {
+                let maybe_threat = self.threats.iter().find(|t| t.row == r && t.column == c);
+
+                match maybe_threat {
+                    Some(threat) if self.show_threats => match threat.color {
                         Piece::Yellow => write!(f, " y")?,
                         Piece::Red => write!(f, " r")?,
                     },
-                    None => {
+                    _ => {
                         write!(f, " {}", cell)?;
                     }
                 }
@@ -480,7 +473,7 @@ mod tests {
         _______
         ";
 
-        let test_board = Board::new(default_board);
+        let test_board = Board::from_str(default_board);
 
         let expected_board = Board::default();
 
@@ -511,7 +504,7 @@ mod tests {
         false
     )]
     fn test_is_empty(#[case] board_str: &str, #[case] expected: bool) {
-        let test_board = Board::new(board_str);
+        let test_board = Board::from_str(board_str);
 
         assert_eq!(expected, test_board.is_empty());
     }
@@ -520,7 +513,7 @@ mod tests {
     fn test_apply_move() {
         let mut board = Board::default();
 
-        let expected_board = Board::new(
+        let expected_board = Board::from_str(
             r"
         _______
         _______
@@ -602,9 +595,9 @@ mod tests {
         "
     )]
     fn test_remove_move(#[case] init: &str, #[case] column: usize, #[case] expected: &str) {
-        let mut init = Board::new(init);
+        let mut init = Board::from_str(init);
 
-        let expected = Board::new(expected);
+        let expected = Board::from_str(expected);
 
         init.remove_move(&column.into()).unwrap();
 
