@@ -10,7 +10,7 @@ use clap::Parser;
 fn main() {
     let args = Args::parse();
 
-    let board = Board::default();
+    let board = Board::new(args.show_threats);
     let player1 = player_from_args(
         Piece::Yellow,
         &board,
@@ -62,6 +62,10 @@ struct Args {
     /// The depth for player2 3 is easy 8 is impossible
     #[arg(long, default_value_t = 5)]
     two_player_depth: usize,
+
+    /// Show threats
+    #[arg(long, default_value_t = false)]
+    show_threats: bool,
 }
 
 fn player_from_args(
